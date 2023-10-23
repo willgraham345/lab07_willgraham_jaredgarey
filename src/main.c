@@ -20,17 +20,12 @@ const struct zcan_filter my_filter = {
         .rtr = CAN_DATAFRAME,
         .id = 0x123,
         .rtr_mask = 1,
-        .id_mask = CAN_STD_ID_MASK
+        .id_mask = CAN_STD_ID_MASK // set to look at all incoming frames
         //Combo of the id_type and id mask is used to match what you're looking for
-        //Masking is bitwise operations. AND operation of bits it doesn't want to look at (sets bits to 0). 
+        //Masking is bitwise operations to only print selections that you want from all available. AND operation of bits it doesn't want to look at (sets bits to 0). 
 };
 
 const struct device *can_dev;
-
-
-
-
-
 
 
 void send_msg_via_can(struct zcan_frame *frame)
