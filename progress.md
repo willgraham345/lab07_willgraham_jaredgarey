@@ -6,10 +6,10 @@ Note that the CAN device is "CAN_1" on the discovery board.
 
 This activity will establish sending and receiving messages.
 
-1. Set the CAN device to loopback mode with `can_set_mode`
-2. Create a function that sends a message periodically using `can_send`.
-3. Register a callback with `can_attach_isr` to receive the messages
-    1. Set the filter to receive any messages.
+~~1. Set the CAN device to loopback mode with `can_set_mode`~~
+~~2. Create a function that sends a message periodically using `can_send`.~~
+~~3. Register a callback with `can_attach_isr` to receive the messages~~
+    ~~1. Set the filter to receive any messages.~~
 
 Hint: follow the examples in the documentation.
 
