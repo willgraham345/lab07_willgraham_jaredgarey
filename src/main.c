@@ -6,14 +6,8 @@
 #include <drivers/gpio.h>
 #include <sys/byteorder.h>
 
-struct zcan_frame frame = {
-        .id_type = CAN_STANDARD_IDENTIFIER,
-        .rtr = CAN_DATAFRAME,
-        .id = 0x123, // Matches to identifier 0x123
-        .dlc = 8, //length of the message
-        .data = {1,2,3,4,5,6,7,8} // uint8_t payload
-};
-
+#define ID1 0x123
+#define ID2 0x234
 
 const struct zcan_filter my_filter = {
         .id_type = CAN_STANDARD_IDENTIFIER,
@@ -37,6 +31,8 @@ void send_msg_via_can(struct zcan_frame *frame)
     }
 
 }
+
+// }
 // TODO: Define a GPIO device
 // TODO: Define a CAN message
 
@@ -45,9 +41,18 @@ void send_msg_via_can(struct zcan_frame *frame)
 // Below are functions from zephyr docs
 void rx_callback_function(struct zcan_frame *frame, void *arg)
 {
-    int filter_id;
-
+    
     // ... do something with the frame ...
+    printk("Rx Callback Function\n");
+    switch (frame->data[0])
+    {
+        case 1:
+            // set gpio pin
+            break;
+        case 2:
+            // set gpio pin
+            break;
+    }
 }
 
 
@@ -56,11 +61,32 @@ void main(void)
 {
     can_dev = device_get_binding("CAN_0");
 
-    // TODO: Set a CAN device to do loopback mode
+    const struct zcan_frame frame1 = 
+    {
+        .id_type = CAN_STANDARD_IDENTIFIER,
+        .rtr = CAN_DATAFRAME,
+        .id = ID1, // Matches to identifier 0x123
+        .dlc = 8, //length of the message
+        .data = {1,2,3,4,5,6,7,8} // uint8_t payload
+    };
+    const struct zcan_frame frame2 = 
+    {
+        .id_type = CAN_STANDARD_IDENTIFIER,
+        .rtr = CAN_DATAFRAME,
+        .id = ID2, // Matches to identifier 0x123
+        .dlc = 8, //length of the message
+        .data = {1,3,5,7,9,11,13,15} // uint8_t payload
+    };
+    
+    // Set a CAN device to do loopback mode
     can_set_mode(&can_dev, CAN_LOOPBACK_MODE); //returns an int
 
-    send_msg_via_can(&frame);
-    int filter_id;
-    filter_id = can_attach_isr(can_dev, rx_callback_function, NULL, &my_filter); // Placing NULL for the callback function for now
+    // Configure GPIO HW pins
+
+
+    send_msg_via_can(&frame1);
+    send_msg_via_can(&frame2);
+    
+    int filter_id = can_attach_isr(can_dev, rx_callback_function, NULL, &my_filter); // Placing NULL for the callback function for now
 
 }
