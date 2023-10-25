@@ -40,15 +40,3 @@ This activity will observe bus contention from a babbling node. "In a Controller
 5. Observe how often the lower priority message is actually transmitted and received.
 6. Introduce a short busy wait delay into the babbling node, and slowly increase the duration until you observe the other messages consistently
 
-## [Activity 3](https://github.com/uofu-emb/rtos/tree/main/labs/7.networking#activity-3-1)
-
-This activity will work with real car data from a 2007 Toyota Yaris. Data used between control units on vehicles is usually proprietary. We'll need to try to reverse engineer what data is being sent.
-
-These were found online from previous groups reverse engineering attempts.
-
-[https://github.com/P1kachu/talking-with-cars/blob/master/notes/toyota-yaris.md](https://github.com/P1kachu/talking-with-cars/blob/master/notes/toyota-yaris.md)
-
-[https://github.com/fabiobaltieri/toyothack/blob/master/toyothack.c](https://github.com/fabiobaltieri/toyothack/blob/master/toyothack.c)
-
-1. Load the provided program onto one of your boards. This program will replay recorded messages from a vehicle can bus.
-2. Try to decode one of the messages from the data.
