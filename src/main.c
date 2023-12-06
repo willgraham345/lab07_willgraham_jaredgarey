@@ -15,7 +15,7 @@
 #define SLEEP_TIME_LEN 1000
 struct gpio_dt_spec led = GPIO_DT_SPEC_GET_OR(DT_ALIAS(led0), gpios, {0});
 const struct device *can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_can_primary));
-const struct zcan_filter my_filter = {
+const struct zcan_filter led_filter = {
         .id_type = CAN_STANDARD_IDENTIFIER,
         .rtr = CAN_DATAFRAME,
         .id = 0x123,
@@ -28,21 +28,26 @@ const struct zcan_filter my_filter = {
 const struct device *can_dev;
 
 
-void send_msg_via_can(struct zcan_frame *frame)
+void send_msg_via_can(struct zcan_frame *frame, bool is_blocking)
 {
     int ret;
-    ret = can_send(can_dev, frame, K_MSEC(100), NULL, NULL);
-    if (ret!=0) {
-        printk("can_send failed, error code: %d\n", ret);
+    if (is_blocking) {
+        ret = can_send(can_dev, frame, K_MSEC(100), NULL, NULL);
+        if (ret!=0) {
+            printk("can_send failed, error code: %d\n", ret);
+        }
     }
-
+    else {
+        can_send(can_dev, frame, K_FOREVER, tx_callback_function, "LED change");
+    }
 }
 
-// }
-// TODO: Define a GPIO device
-// TODO: Define a CAN message
-
-
+void tx_callback_function(uint32_t ret_val, char *info)
+{
+    if (ret_val != 0) {
+        printk("TX Callback: From %s \t Error Code: %d\n", info, ret);
+    }
+}
 
 // Below are functions from zephyr docs
 void rx_callback_function(struct zcan_frame *frame, void *arg)
@@ -69,20 +74,30 @@ void rx_callback_function(struct zcan_frame *frame, void *arg)
 
 void main(void)
 {
-    struct zcan_frame frame1 = 
+    struct zcan_frame led_frame = 
     {
         .id_type = CAN_STANDARD_IDENTIFIER,
         .rtr = CAN_DATAFRAME,
-        .id = 0x01, // Matches to identifier 0x123
+        .id = LED_MSG_ID, // Matches to identifier 0x123
         .dlc = 1, //length of the message
         .data = {1} // uint8_t payload
     };
+    struct zcan_frame counter_frame = 
+    {
+        .id_type = CAN_EXTENDED_IDENTIFIER,
+        .rtr = CAN_DATAFRAME,
+        .id = COUNTER_MSG_ID, // Matches to identifier 0x123
+        .dlc = 2, //length of the message
+        .data = {0} // uint8_t payload
+    };
     
     // Set a CAN device to do loopback mode
+    // TODO: only set this in certain build environments
     can_set_mode(&can_dev, CAN_LOOPBACK_MODE); //returns an int
 
     // Setting up callback function for filter ID
-    int filter_id = can_attach_isr(can_dev, rx_callback_function, NULL, &my_filter); // Placing NULL for the callback function for now
+    int filter_id = can_attach_isr(can_dev, rx_callback_function, NULL, &led_filter);
+    // TODO: make an rx thread using a workq instead (activity 3)
     
 
     // If statement configures gpio hardware pins
@@ -102,9 +117,13 @@ void main(void)
 	}
     while (1)
     {
-        frame1.data[0] ^= 1; //Toggle LED state each iteration
-        printk("Sending one message\n");
-        send_msg_via_can(&frame1);
+        led_frame.data[0] ^= 1; //Toggle LED state each iteration
+        printk("Sending LED message\n");
+        send_msg_via_can(&led_frame, true);
+
+        counter_frame.data[0] = counter_frame.data[0]++; // make the data look like other random messages
+        printk("Sending counter message\n");
+        send_msg_via_can(&counter_frame, false);
         k_sleep(K_MSEC(SLEEP_TIME_LEN));
     }
 }

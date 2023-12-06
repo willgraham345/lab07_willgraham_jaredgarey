@@ -17,8 +17,8 @@ Hint: follow the examples in the documentation.
 
 This activity will deal with filtering for specific message types.
 
-1. Create a function that sends two different types of messages.
-2. Register a callback which filters only one type of message.
+~~1. Create a function that sends two different types of messages.~~
+~~. Register a callback which filters only one type of message.~~
 
 ## [Activity 2](https://github.com/uofu-emb/rtos/tree/main/labs/7.networking#activity-2)
 
