@@ -6,6 +6,10 @@
 #include <drivers/gpio.h>
 #include <sys/byteorder.h>
 
+// comment out the activity if we're doing activity 1 or 2
+#define ACTIVITY_3 1
+
+
 #define SET_LED 1
 #define RESET_LED 0
 #define LED_MSG_ID 0x01
@@ -13,19 +17,33 @@
 #define ID1 0x123
 #define ID2 0x234
 #define SLEEP_TIME_LEN 1000
+
+#define RX_THREAD_STACK_SIZE 512
+#define RX_THREAD_PRIORITY 2
+K_THREAD_STACK_DEFINE(rx_thread_stack, RX_THREAD_STACK_SIZE);
+CAN_DEFINE_MSGQ(counter_msgq, 2);
+
+struct zcan_work rx_work;
+
 struct gpio_dt_spec led = GPIO_DT_SPEC_GET_OR(DT_ALIAS(led0), gpios, {0});
 const struct device *can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_can_primary));
 const struct zcan_filter led_filter = {
         .id_type = CAN_STANDARD_IDENTIFIER,
         .rtr = CAN_DATAFRAME,
-        .id = 0x123,
+        .id = LED_MSG_ID,
         .rtr_mask = 1,
         .id_mask = CAN_STD_ID_MASK // set to look at all incoming frames
         //Combo of the id_type and id mask is used to match what you're looking for
         //Masking is bitwise operations to only print selections that you want from all available. AND operation of bits it doesn't want to look at (sets bits to 0). 
 };
 
-const struct device *can_dev;
+const struct zcan_filter counter_filter = {
+        .id_type = CAN_EXTENDED_IDENTIFIER,
+        .rtr = CAN_DATAFRAME,
+        .id = COUNTER_MSG_ID,
+        .rtr_mask = 1,
+        .id_mask = CAN_EXT_ID_MASK
+};
 
 
 void tx_callback_function(uint32_t ret_val, char *info)
@@ -35,7 +53,7 @@ void tx_callback_function(uint32_t ret_val, char *info)
     }
 }
 
-// Below are functions from zephyr docs
+
 void rx_callback_function(struct zcan_frame *frame, void *arg)
 {
     
@@ -70,6 +88,29 @@ void send_msg_via_can(struct zcan_frame *frame, bool is_blocking)
     }
 }
 
+void rx_thread(void *arg1, void *arg2, void *arg3)
+{
+	struct zcan_frame msg;
+
+    // set up rx msg queue
+	int filter_id = can_attach_msgq(can_dev, &counter_msgq, &counter_filter);
+	printk("Counter filter id: %d\n", filter_id);
+
+    while(1)
+    {
+		k_msgq_get(&counter_msgq, &msg, K_FOREVER);
+
+        // check for message we're expecting
+        if (msg.dlc != 2U) {
+			printk("Wrong data length: %u\n", msg.dlc);
+			continue;
+		}
+
+		printk("Counter received: %u\n",
+		       sys_be16_to_cpu(UNALIGNED_GET((uint16_t *)&msg.data)));
+    }
+}
+
 void main(void)
 {
     struct zcan_frame led_frame = 
@@ -89,13 +130,32 @@ void main(void)
         .data = {0} // uint8_t payload
     };
     
-    // Set a CAN device to do loopback mode
-    // TODO: only set this in certain build environments
+    // Set a CAN device to do loopback mode (Only set this in certain build environments)
+    #ifdef CONFIG_LOOPBACK_MODE
     can_set_mode(&can_dev, CAN_LOOPBACK_MODE); //returns an int
+    #endif
+    
+    int ret;
 
+    // activity 1&2:
+#ifndef ACTIVITY_3
     // Setting up callback function for filter ID
-    int filter_id = can_attach_isr(can_dev, rx_callback_function, NULL, &led_filter);
-    // TODO: make an rx thread using a workq instead (activity 3)
+    ret = can_attach_isr(can_dev, rx_callback_function, NULL, &led_filter);
+#else
+    // activity 3:
+    // Make rx workq to listen for LED CAN messages
+    ret = can_attach_workq(can_dev, &k_sys_work_q, &rx_work, &rx_callback_function, NULL, &led_filter);
+    if (ret == CAN_NO_FREE_FILTER) {
+		printk("Error, no filter available!\n");
+		return;
+	}
+#endif
+
+    // Make an rx thread using a workq instead to receive the Counter CAN messages
+    rx_tid = k_thread_create(&rx_thread_data, rx_thread_stack,
+				 K_THREAD_STACK_SIZEOF(rx_thread_stack),
+				 rx_thread, NULL, NULL, NULL,
+				 RX_THREAD_PRIORITY, 0, K_NO_WAIT);
     
 
     // If statement configures gpio hardware pins
@@ -113,6 +173,8 @@ void main(void)
 			led.port = NULL;
 		}
 	}
+
+    // Send (TX) both CAN messages
     while (1)
     {
         led_frame.data[0] ^= 1; //Toggle LED state each iteration
