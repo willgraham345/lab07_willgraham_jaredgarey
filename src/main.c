@@ -23,8 +23,6 @@
 K_THREAD_STACK_DEFINE(rx_thread_stack, RX_THREAD_STACK_SIZE);
 CAN_DEFINE_MSGQ(counter_msgq, 2);
 
-struct zcan_work rx_work;
-
 struct gpio_dt_spec led = GPIO_DT_SPEC_GET_OR(DT_ALIAS(led0), gpios, {0});
 const struct device *can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_can_primary));
 const struct zcan_filter led_filter = {
@@ -45,6 +43,9 @@ const struct zcan_filter counter_filter = {
         .id_mask = CAN_EXT_ID_MASK
 };
 
+
+struct zcan_work rx_work;
+struct k_thread rx_thread_data;
 
 void tx_callback_function(uint32_t ret_val, char *info)
 {
@@ -136,6 +137,7 @@ void main(void)
     #endif
     
     int ret;
+    k_tid_t rx_tid;
 
     // activity 1&2:
 #ifndef ACTIVITY_3
@@ -159,7 +161,6 @@ void main(void)
     
 
     // If statement configures gpio hardware pins
-    int ret;
     if (led.port != NULL) {
 		if (!device_is_ready(led.port)) {
 			printk("LED: Device %s not ready.\n",
