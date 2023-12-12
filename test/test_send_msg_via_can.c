@@ -2,9 +2,6 @@
 #include <unity.h>
 #include <kernel.h>
 #include <sys/printk.h>
-#include <device.h>
-#include <drivers/gpio.h>
-#include <sys/byteorder.h>
 
 // Include lib files
 #include "send_msg_via_can.c"
@@ -23,7 +20,6 @@
 #define RX_THREAD_PRIORITY 2
 
 // Define Globals
-struct gpio_dt_spec led = GPIO_DT_SPEC_GET_OR(DT_ALIAS(led0), gpios, {0});
 const struct device *can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_can_primary));
 
 void setUp(void)

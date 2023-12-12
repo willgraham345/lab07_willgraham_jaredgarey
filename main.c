@@ -47,33 +47,33 @@ const struct zcan_filter counter_filter = {
 struct zcan_work rx_work;
 struct k_thread rx_thread_data;
 
-void tx_callback_function(uint32_t ret_val, char *info)
-{
-    if (ret_val != 0) {
-        printk("TX Callback: From %s \t Error Code: %d\n", info, ret_val);
-    }
-}
+// void tx_callback_function(uint32_t ret_val, char *info)
+// {
+//     if (ret_val != 0) {
+//         printk("TX Callback: From %s \t Error Code: %d\n", info, ret_val);
+//     }
+// }
 
 
-void rx_callback_function(struct zcan_frame *frame, void *arg)
-{
+// void rx_callback_function(struct zcan_frame *frame, void *arg)
+// {
     
-    // ... do something with the frame ...
-    printk("Rx Callback Function Hit\n");
-    switch (frame->data[0])
-    {
-        case 1:
-            // set gpio pin
-            printk("Hitting Case 1");
-            gpio_pin_set(led.port, led.pin, SET_LED);
-            break;
-        case 2:
-            // set gpio pin
-            printk("Hitting Case 2");
-            gpio_pin_set(led.port, led.pin, RESET_LED);
-            break;
-    }
-}
+//     // ... do something with the frame ...
+//     printk("Rx Callback Function Hit\n");
+//     switch (frame->data[0])
+//     {
+//         case 1:
+//             // set gpio pin
+//             printk("Hitting Case 1");
+//             gpio_pin_set(led.port, led.pin, SET_LED);
+//             break;
+//         case 2:
+//             // set gpio pin
+//             printk("Hitting Case 2");
+//             gpio_pin_set(led.port, led.pin, RESET_LED);
+//             break;
+//     }
+// }
 
 // void send_msg_via_can(struct zcan_frame *frame, bool is_blocking)
 // {
@@ -89,28 +89,28 @@ void rx_callback_function(struct zcan_frame *frame, void *arg)
 //     }
 // }
 
-void rx_thread(void *arg1, void *arg2, void *arg3)
-{
-	struct zcan_frame msg;
+// void rx_thread(void *arg1, void *arg2, void *arg3)
+// {
+// 	struct zcan_frame msg;
 
-    // set up rx msg queue
-	int filter_id = can_attach_msgq(can_dev, &counter_msgq, &counter_filter);
-	printk("Counter filter id: %d\n", filter_id);
+//     // set up rx msg queue
+// 	int filter_id = can_attach_msgq(can_dev, &counter_msgq, &counter_filter);
+// 	printk("Counter filter id: %d\n", filter_id);
 
-    while(1)
-    {
-		k_msgq_get(&counter_msgq, &msg, K_FOREVER);
+//     while(1)
+//     {
+// 		k_msgq_get(&counter_msgq, &msg, K_FOREVER);
 
-        // check for message we're expecting
-        if (msg.dlc != 2U) {
-			printk("Wrong data length: %u\n", msg.dlc);
-			continue;
-		}
+//         // check for message we're expecting
+//         if (msg.dlc != 2U) {
+// 			printk("Wrong data length: %u\n", msg.dlc);
+// 			continue;
+// 		}
 
-		printk("Counter received: %u\n",
-		       sys_be16_to_cpu(UNALIGNED_GET((uint16_t *)&msg.data)));
-    }
-}
+// 		printk("Counter received: %u\n",
+// 		       sys_be16_to_cpu(UNALIGNED_GET((uint16_t *)&msg.data)));
+//     }
+// }
 
 void main(void)
 {
