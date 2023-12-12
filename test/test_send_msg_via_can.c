@@ -7,7 +7,7 @@
 #include <sys/byteorder.h>
 
 // Include lib files
-#include "send_msg_via_can.h"
+#include "send_msg_via_can.c"
 
 
 // Define MACROS
@@ -43,10 +43,10 @@ void test_send_msg_via_can_blocking(void)
     bool is_blocking = true;
 
     // Call the function
-    send_msg_via_can(can_dev, &frame, is_blocking);
+    int ret;
+    ret = send_msg_via_can(can_dev, &frame, is_blocking);
 
-    // TODO: Add assertions to check the behavior of the function
-    TEST_ASSERT_EQUAL(0, 0);
+    TEST_ASSERT_EQUAL(0, ret);
 }
 
 void test_send_msg_via_can_non_blocking(void)
@@ -56,9 +56,10 @@ void test_send_msg_via_can_non_blocking(void)
     bool is_blocking = false;
 
     // Call the function
-    send_msg_via_can(can_dev, &frame, is_blocking);
-
-    // TODO: Add assertions to check the behavior of the function
+    int ret;
+    ret = send_msg_via_can(can_dev, &frame, is_blocking);
+    // CAN is blocking, so this test should fail. 
+    TEST_ASSERT_NOT_EQUAL(0, ret);
 }
 
 int main(void)

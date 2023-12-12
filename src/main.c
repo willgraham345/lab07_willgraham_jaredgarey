@@ -2,10 +2,10 @@
 #include <kernel.h>
 #include <sys/printk.h>
 #include <device.h>
-// #include <drivers/can.h>
 #include <drivers/gpio.h>
 #include <sys/byteorder.h>
 
+#include "send_msg_via_can.h"
 // comment out the activity if we're doing activity 1 or 2
 #define ACTIVITY_3 1
 
@@ -180,11 +180,13 @@ void main(void)
     {
         led_frame.data[0] ^= 1; //Toggle LED state each iteration
         printk("Sending LED message\n");
-        send_msg_via_can(&led_frame, true);
+        int ret1;
+        ret = send_msg_via_can(&led_frame, true);
 
         counter_frame.data[0] = counter_frame.data[0]++; // make the data look like other random messages
         printk("Sending counter message\n");
-        send_msg_via_can(&counter_frame, false);
+        int ret2;
+        ret2 = send_msg_via_can(&counter_frame, false);
         k_sleep(K_MSEC(SLEEP_TIME_LEN));
     }
 }
