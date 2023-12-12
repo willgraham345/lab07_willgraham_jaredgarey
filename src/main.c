@@ -2,7 +2,7 @@
 #include <kernel.h>
 #include <sys/printk.h>
 #include <device.h>
-#include <drivers/can.h>
+// #include <drivers/can.h>
 #include <drivers/gpio.h>
 #include <sys/byteorder.h>
 
@@ -75,19 +75,19 @@ void rx_callback_function(struct zcan_frame *frame, void *arg)
     }
 }
 
-void send_msg_via_can(struct zcan_frame *frame, bool is_blocking)
-{
-    int ret;
-    if (is_blocking) {
-        ret = can_send(can_dev, frame, K_MSEC(100), NULL, NULL);
-        if (ret!=0) {
-            printk("can_send failed, error code: %d\n", ret);
-        }
-    }
-    else {
-        can_send(can_dev, frame, K_FOREVER, tx_callback_function, "LED change");
-    }
-}
+// void send_msg_via_can(struct zcan_frame *frame, bool is_blocking)
+// {
+//     int ret;
+//     if (is_blocking) {
+//         ret = can_send(can_dev, frame, K_MSEC(100), NULL, NULL);
+//         if (ret!=0) {
+//             printk("can_send failed, error code: %d\n", ret);
+//         }
+//     }
+//     else {
+//         can_send(can_dev, frame, K_FOREVER, tx_callback_function, "LED change");
+//     }
+// }
 
 void rx_thread(void *arg1, void *arg2, void *arg3)
 {
