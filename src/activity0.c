@@ -3,10 +3,8 @@
 #include <sys/printk.h>
 
 #include "send_msg_via_can.h"
+#include "rx_callback_function.h"
 
-//Define MACROS
-#define SET_LED 1
-#define RESET_LED 0
 #define LED_MSG_ID 0x01
 #define COUNTER_MSG_ID 0x00
 #define ID1 0x123

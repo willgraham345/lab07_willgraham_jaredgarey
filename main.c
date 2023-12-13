@@ -139,8 +139,13 @@ void main(void)
     int ret;
     k_tid_t rx_tid;
 
+    ////////////////////// ////////////////////////////////////// 
+    // Below is different ways of implementing our rx_callback_function
+    // It then defines a filter
+    // We have main as the tx thread, and then we define an rx thread in rx_tid rx_tid is an integer representing the thread
+
     // activity 1&2:
-#ifndef ACTIVITY_3
+#ifndef ACTIVITY_3 
     // Setting up callback function for filter ID
     ret = can_attach_isr(can_dev, rx_callback_function, NULL, &led_filter);
 #else

@@ -3,7 +3,7 @@
 #include <kernel.h>
 #include <drivers/gpio.h>
 
-#include "rx_callback_function.c"
+#include "rx_callback_function.h"
 
 // Define MACROS needed for testing
 #define LED_MSG_ID 0x01
