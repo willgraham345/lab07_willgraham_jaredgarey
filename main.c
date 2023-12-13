@@ -2,10 +2,10 @@
 #include <kernel.h>
 #include <sys/printk.h>
 #include <device.h>
+#include <drivers/can.h>
 #include <drivers/gpio.h>
 #include <sys/byteorder.h>
 
-#include "send_msg_via_can.h"
 // comment out the activity if we're doing activity 1 or 2
 #define ACTIVITY_3 1
 
@@ -47,70 +47,70 @@ const struct zcan_filter counter_filter = {
 struct zcan_work rx_work;
 struct k_thread rx_thread_data;
 
-// void tx_callback_function(uint32_t ret_val, char *info)
-// {
-//     if (ret_val != 0) {
-//         printk("TX Callback: From %s \t Error Code: %d\n", info, ret_val);
-//     }
-// }
+void tx_callback_function(uint32_t ret_val, char *info)
+{
+    if (ret_val != 0) {
+        printk("TX Callback: From %s \t Error Code: %d\n", info, ret_val);
+    }
+}
 
 
-// void rx_callback_function(struct zcan_frame *frame, void *arg)
-// {
+void rx_callback_function(struct zcan_frame *frame, void *arg)
+{
     
-//     // ... do something with the frame ...
-//     printk("Rx Callback Function Hit\n");
-//     switch (frame->data[0])
-//     {
-//         case 1:
-//             // set gpio pin
-//             printk("Hitting Case 1");
-//             gpio_pin_set(led.port, led.pin, SET_LED);
-//             break;
-//         case 2:
-//             // set gpio pin
-//             printk("Hitting Case 2");
-//             gpio_pin_set(led.port, led.pin, RESET_LED);
-//             break;
-//     }
-// }
+    // ... do something with the frame ...
+    printk("Rx Callback Function Hit\n");
+    switch (frame->data[0])
+    {
+        case 1:
+            // set gpio pin
+            printk("Hitting Case 1");
+            gpio_pin_set(led.port, led.pin, SET_LED);
+            break;
+        case 2:
+            // set gpio pin
+            printk("Hitting Case 2");
+            gpio_pin_set(led.port, led.pin, RESET_LED);
+            break;
+    }
+}
 
-// void send_msg_via_can(struct zcan_frame *frame, bool is_blocking)
-// {
-//     int ret;
-//     if (is_blocking) {
-//         ret = can_send(can_dev, frame, K_MSEC(100), NULL, NULL);
-//         if (ret!=0) {
-//             printk("can_send failed, error code: %d\n", ret);
-//         }
-//     }
-//     else {
-//         can_send(can_dev, frame, K_FOREVER, tx_callback_function, "LED change");
-//     }
-// }
+void send_msg_via_can(struct zcan_frame *frame, bool is_blocking)
+{
+    int ret;
+    if (is_blocking) {
+        ret = can_send(can_dev, frame, K_MSEC(100), NULL, NULL);
+        if (ret!=0) {
+            printk("can_send failed, error code: %d\n", ret);
+        }
+    }
+    else {
+        can_send(can_dev, frame, K_FOREVER, tx_callback_function, "LED change");
+    }
+}
 
-// void rx_thread(void *arg1, void *arg2, void *arg3)
-// {
-// 	struct zcan_frame msg;
+void rx_thread(void *arg1, void *arg2, void *arg3)
+{
+	struct zcan_frame msg;
 
-//     // set up rx msg queue
-// 	int filter_id = can_attach_msgq(can_dev, &counter_msgq, &counter_filter);
-// 	printk("Counter filter id: %d\n", filter_id);
+    // set up rx msg queue
+	int filter_id = can_attach_msgq(can_dev, &counter_msgq, &counter_filter);
+	printk("Counter filter id: %d\n", filter_id);
 
-//     while(1)
-//     {
-// 		k_msgq_get(&counter_msgq, &msg, K_FOREVER);
+    while(1)
+    {
+		k_msgq_get(&counter_msgq, &msg, K_FOREVER);
 
-//         // check for message we're expecting
-//         if (msg.dlc != 2U) {
-// 			printk("Wrong data length: %u\n", msg.dlc);
-// 			continue;
-// 		}
+        // check for message we're expecting
+        if (msg.dlc != 2U) {
+			printk("Wrong data length: %u\n", msg.dlc);
+			continue;
+		}
 
-// 		printk("Counter received: %u\n",
-// 		       sys_be16_to_cpu(UNALIGNED_GET((uint16_t *)&msg.data)));
-//     }
-// }
+		printk("Counter received: %u\n",
+		       sys_be16_to_cpu(UNALIGNED_GET((uint16_t *)&msg.data)));
+    }
+}
 
 void main(void)
 {
@@ -180,13 +180,11 @@ void main(void)
     {
         led_frame.data[0] ^= 1; //Toggle LED state each iteration
         printk("Sending LED message\n");
-        int ret1;
-        ret = send_msg_via_can(&led_frame, true);
+        send_msg_via_can(&led_frame, true);
 
         counter_frame.data[0] = counter_frame.data[0]++; // make the data look like other random messages
         printk("Sending counter message\n");
-        int ret2;
-        ret2 = send_msg_via_can(&counter_frame, false);
+        send_msg_via_can(&counter_frame, false);
         k_sleep(K_MSEC(SLEEP_TIME_LEN));
     }
 }
