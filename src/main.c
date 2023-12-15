@@ -56,17 +56,13 @@ void activity0(void)
 {
 
     // Create a new frame
-    #ifdef CONFIG_LOOPBACK_MODE
-    can_set_mode(&can_dev, CAN_LOOPBACK_MODE); //returns an int
-    #endif
-
     struct zcan_frame frame;
     rx_callback_function(&led, &frame, NULL);
 
     int ret;
     ret = can_attach_isr(can_dev, rx_callback_function, NULL, &led_filter);
 
-}
+};
 
 void activity1(void)
 {
@@ -80,20 +76,64 @@ void activity1(void)
     // Register callback for LED message
     can_attach_isr(can_dev, rx_callback_function, NULL, &led_filter);
 
-    // Register callback for counter message
-    can_attach_isr(can_dev, rx_callback_function, NULL, &counter_filter);
+};
 
-}
+void activity2(void)
+{
+    // Run code from activity 1, observing electrical behvior of bus line and MCU lines
+    activity1();
+};
+
+void activity3_babble(void)
+{
+    send_msg_via_can(can_dev, &led_frame, true);
+
+    // Send counter message
+    send_msg_via_can(can_dev, &counter_frame, false);
+
+    // Register callback for LED message
+    can_attach_isr(can_dev, rx_callback_function, NULL, &led_filter);
+};
+
+void activity3_normal(void)
+{
+    send_msg_via_can(can_dev, &led_frame, false);
+
+    // Send counter message
+    send_msg_via_can(can_dev, &counter_frame, false);
+
+    // Register callback for LED message
+    can_attach_isr(can_dev, rx_callback_function, NULL, &led_filter);   // babbling node
+};
 
 int main()
 {
     // Redirect to other main functions
     #ifdef RUN_ACTIVITY0
+    can_set_mode(&can_dev, CAN_LOOPBACK_MODE);
     activity0();
     #endif
 
     #ifdef RUN_ACTIVITY1
+    can_set_mode(&can_dev, CAN_LOOPBACK_MODE);
     activity1();
+    #endif
+
+    #ifdef RUN_ACTIVITY2
+    can_set_mode(&can_dev, CAN_NORMAL_MODE);
+    activity2();
+    #endif
+
+
+    #ifdef RUN_ACTIVITY3_BABBLE
+    can_set_mode(&can_dev, CAN_NORMAL_MODE);
+    activity3_babble();
+    #endif
+
+
+    #ifdef RUN_ACTIVITY3_NORMAL
+    can_set_mode(&can_dev, CAN_NORMAL_MODE);
+    activity3_normal();
     #endif
 
     return 0;
