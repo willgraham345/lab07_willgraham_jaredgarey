@@ -51,8 +51,10 @@ const struct zcan_filter counter_filter = {
         .rtr_mask = 1,
         .id_mask = CAN_EXT_ID_MASK
 };
+
 void activity0(void)
 {
+
     // Create a new frame
     #ifdef CONFIG_LOOPBACK_MODE
     can_set_mode(&can_dev, CAN_LOOPBACK_MODE); //returns an int
@@ -63,20 +65,36 @@ void activity0(void)
 
     int ret;
     ret = can_attach_isr(can_dev, rx_callback_function, NULL, &led_filter);
+
 }
 
 void activity1(void)
 {
+
+    // Send LED message
+    send_msg_via_can(can_dev, &led_frame, false);
+
+    // Send counter message
+    send_msg_via_can(can_dev, &counter_frame, false);
+
+    // Register callback for LED message
+    can_attach_isr(can_dev, rx_callback_function, NULL, &led_filter);
+
+    // Register callback for counter message
+    can_attach_isr(can_dev, rx_callback_function, NULL, &counter_filter);
 
 }
 
 int main()
 {
     // Redirect to other main functions
+    #ifdef RUN_ACTIVITY0
     activity0();
+    #endif
+
+    #ifdef RUN_ACTIVITY1
     activity1();
-    // ...
+    #endif
+
     return 0;
-}
-    
 }
