@@ -2,7 +2,7 @@
 #include <unity.h>
 #include <kernel.h>
 #include <drivers/gpio.h>
-
+#include <sys/byteorder.h>
 #include "rx_callback_function.h"
 
 // Define MACROS needed for testing
@@ -25,10 +25,8 @@ K_THREAD_STACK_DEFINE(rx_thread_stack, RX_THREAD_STACK_SIZE);
 struct k_thread rx_thread_data;
 CAN_DEFINE_MSGQ(counter_msgq, 2);
 const struct device *can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_can_primary));
-
-
-// not sure if we need these
 struct gpio_dt_spec led = GPIO_DT_SPEC_GET_OR(DT_ALIAS(led0), gpios, {0});
+
 
 
 
@@ -42,13 +40,13 @@ void tearDown(void)
 }
 
 
-void rx_thread(can_dev, counter_filter, void *arg1, void *arg2, void *arg3)
+void rx_thread(const struct zcan_filter *counter_filter, void *arg1, void *arg2, void *arg3)
 {
     // initialize msg queue
 	struct zcan_frame msg;
 
     // set up rx msg queue
-	int filter_id = can_attach_msgq(can_dev, &counter_msgq, &counter_filter);
+	int filter_id = can_attach_msgq(can_dev, &counter_msgq, counter_filter);
 	printk("Counter filter id: %d\n", filter_id);
 
     while(1)
@@ -69,7 +67,8 @@ void rx_thread(can_dev, counter_filter, void *arg1, void *arg2, void *arg3)
 void test_rx_thread_setup(void)
 {
     // set up rx thread
-    RxThread = k_thread_create(&rx_thread_data, rx_thread_stack,
+    k_tid_t rx_tid;
+    rx_tid = k_thread_create(&rx_thread_data, rx_thread_stack,
             K_THREAD_STACK_SIZEOF(rx_thread_stack),
             (k_thread_entry_t)rx_thread,
             NULL,
@@ -78,19 +77,36 @@ void test_rx_thread_setup(void)
             RX_THREAD_PRIORITY,
             0,
             K_NO_WAIT);
+    
+    // TODO: Add tests for rx_thread_setup
 }
 
-void test_rx_callback_function_case_2(void)
+void configure_gpio_pins(struct gpio_dt_spec led, int ret)
 {
+    if (led.port != NULL) {
+		if (!device_is_ready(led.port)) {
+			printk("LED: Device %s not ready.\n",
+			       led.port->name);
+			return;
+		}
+		ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_HIGH);
+		if (ret < 0) {
+			printk("Error setting LED pin to output mode [%d]",
+			       ret);
+			led.port = NULL;
+		}
+	}
 }
 
-void test_rx_callback_function_invalid_case(void)
-{
-}
+
 
 int main(void)
 {
     UNITY_BEGIN();
+    // The below may or may not be needed.
+    // struct zcan_work rx_work;
+    struct k_thread rx_thread_data;
+
     const struct zcan_filter led_filter = {
         .id_type = CAN_STANDARD_IDENTIFIER,
         .rtr = CAN_DATAFRAME,
@@ -109,9 +125,15 @@ int main(void)
         .id_mask = CAN_EXT_ID_MASK
     };
 
-    RUN_TEST(test_rx_callback_function_case_1);
-    RUN_TEST(test_rx_callback_function_case_2);
-    RUN_TEST(test_rx_callback_function_invalid_case);
+
+    struct zcan_frame msg;
+    int ret = can_attach_msgq(can_dev, &counter_msgq, &counter_filter);
+    printk("Counter filter id: %d\n", ret);
+    configure_gpio_pins(led, ret);
+
+
+    // test_rx_thread_setup();
+    RUN_TEST(test_rx_thread_setup);
 
     return UNITY_END();
 }

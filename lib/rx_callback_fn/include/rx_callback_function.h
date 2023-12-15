@@ -14,4 +14,4 @@
 
 #define SET_LED 1
 #define RESET_LED 0
-void rx_callback_function(const struct gpio_dt_spec *led, struct zcan_frame *frame, void *arg);
+void rx_callback_function(const struct gpio_dt_spec *mock_led, struct zcan_frame *frame, void *arg);
