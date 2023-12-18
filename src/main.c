@@ -1,267 +1,140 @@
-/*
- * Copyright (c) 2018 Alexander Wachter
- *
- * SPDX-License-Identifier: Apache-2.0
- */
-
 #include <zephyr.h>
 #include <kernel.h>
 #include <sys/printk.h>
-#include <device.h>
-#include <drivers/can.h>
-#include <drivers/gpio.h>
-#include <sys/byteorder.h>
+#include "send_msg_via_can.h"
+#include "rx_callback_function.h"
 
+
+#define LED_MSG_ID 0x01
+#define COUNTER_MSG_ID 0x00
+#define ID1 0x123
+#define ID2 0x234
+#define SLEEP_TIME_LEN 1000
 #define RX_THREAD_STACK_SIZE 512
 #define RX_THREAD_PRIORITY 2
-#define STATE_POLL_THREAD_STACK_SIZE 512
-#define STATE_POLL_THREAD_PRIORITY 2
-#define LED_MSG_ID 0x10
-#define COUNTER_MSG_ID 0x12345
-#define SET_LED 1
-#define RESET_LED 0
-#define SLEEP_TIME K_MSEC(250)
 
-K_THREAD_STACK_DEFINE(rx_thread_stack, RX_THREAD_STACK_SIZE);
-K_THREAD_STACK_DEFINE(poll_state_stack, STATE_POLL_THREAD_STACK_SIZE);
-
-const struct device *can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_can_primary));
+//Define Globals
 struct gpio_dt_spec led = GPIO_DT_SPEC_GET_OR(DT_ALIAS(led0), gpios, {0});
-
-struct k_thread rx_thread_data;
-struct k_thread poll_state_thread_data;
-struct zcan_work rx_work;
-struct k_work state_change_work;
-enum can_state current_state;
-struct can_bus_err_cnt current_err_cnt;
-
-CAN_DEFINE_MSGQ(counter_msgq, 2);
-
-void tx_irq_callback(uint32_t error_flags, void *arg)
+const struct device *can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_can_primary));
+struct zcan_frame led_frame = 
 {
-	char *sender = (char *)arg;
-	if (error_flags) {
-		printk("Callback! error-code: %d\nSender: %s\n",
-		       error_flags, sender);
-	}
-}
+    .id_type = CAN_STANDARD_IDENTIFIER,
+    .rtr = CAN_DATAFRAME,
+    .id = LED_MSG_ID,
+    .dlc = 1U,
+    .data = {RESET_LED}
+};
 
-void rx_thread(void *arg1, void *arg2, void *arg3)
+struct zcan_frame counter_frame = 
 {
-	ARG_UNUSED(arg1);
-	ARG_UNUSED(arg2);
-	ARG_UNUSED(arg3);
-	const struct zcan_filter filter = {
-		.id_type = CAN_EXTENDED_IDENTIFIER,
-		.rtr = CAN_DATAFRAME,
-		.id = COUNTER_MSG_ID,
-		.rtr_mask = 1,
-		.id_mask = CAN_EXT_ID_MASK
-	};
-	struct zcan_frame msg;
-	int filter_id;
+    .id_type = CAN_EXTENDED_IDENTIFIER,
+    .rtr = CAN_DATAFRAME,
+    .id = COUNTER_MSG_ID,
+    .dlc = 2U,
+    .data = {0x00, 0x00}
+};
 
-	filter_id = can_attach_msgq(can_dev, &counter_msgq, &filter);
-	printk("Counter filter id: %d\n", filter_id);
+const struct zcan_filter led_filter = {
+        .id_type = CAN_STANDARD_IDENTIFIER,
+        .rtr = CAN_DATAFRAME,
+        .id = LED_MSG_ID,
+        .rtr_mask = 1,
+        .id_mask = CAN_STD_ID_MASK // set to look at all incoming frames
+        //Combo of the id_type and id mask is used to match what you're looking for
+        //Masking is bitwise operations to only print selections that you want from all available. AND operation of bits it doesn't want to look at (sets bits to 0). 
+};
 
-	while (1) {
-		k_msgq_get(&counter_msgq, &msg, K_FOREVER);
+const struct zcan_filter counter_filter = {
+        .id_type = CAN_EXTENDED_IDENTIFIER,
+        .rtr = CAN_DATAFRAME,
+        .id = COUNTER_MSG_ID,
+        .rtr_mask = 1,
+        .id_mask = CAN_EXT_ID_MASK
+};
 
-		if (msg.dlc != 2U) {
-			printk("Wrong data length: %u\n", msg.dlc);
-			continue;
-		}
-
-		printk("Counter received: %u\n",
-		       sys_be16_to_cpu(UNALIGNED_GET((uint16_t *)&msg.data)));
-	}
-}
-
-void change_led(struct zcan_frame *msg, void *unused)
+void activity0(void)
 {
-	ARG_UNUSED(unused);
 
-	if (led.port == NULL) {
-		printk("LED %s\n", msg->data[0] == SET_LED ? "ON" : "OFF");
-		return;
-	}
+    // Create a new frame
+    struct zcan_frame frame;
+    rx_callback_function(&led, &frame, NULL);
 
-	switch (msg->data[0]) {
-	case SET_LED:
-		gpio_pin_set(led.port, led.pin, 1);
-		break;
-	case RESET_LED:
-		gpio_pin_set(led.port, led.pin, 0);
-		break;
-	}
-}
+    int ret;
+    ret = can_attach_isr(can_dev, rx_callback_function, NULL, &led_filter);
 
-char *state_to_str(enum can_state state)
+};
+
+void activity1(void)
 {
-	switch (state) {
-	case CAN_ERROR_ACTIVE:
-		return "error-active";
-	case CAN_ERROR_PASSIVE:
-		return "error-passive";
-	case CAN_BUS_OFF:
-		return "bus-off";
-	default:
-		return "unknown";
-	}
-}
 
-void poll_state_thread(void *unused1, void *unused2, void *unused3)
+    // Send LED message
+    send_msg_via_can(can_dev, &led_frame, false);
+
+    // Send counter message
+    send_msg_via_can(can_dev, &counter_frame, false);
+
+    // Register callback for LED message
+    can_attach_isr(can_dev, rx_callback_function, NULL, &led_filter);
+
+};
+
+void activity2(void)
 {
-	struct can_bus_err_cnt err_cnt = {0, 0};
-	struct can_bus_err_cnt err_cnt_prev = {0, 0};
-	enum can_state state_prev = CAN_ERROR_ACTIVE;
-	enum can_state state;
+    // Run code from activity 1, observing electrical behvior of bus line and MCU lines
+    activity1();
+};
 
-	while (1) {
-		state = can_get_state(can_dev, &err_cnt);
-		if (err_cnt.tx_err_cnt != err_cnt_prev.tx_err_cnt ||
-		    err_cnt.rx_err_cnt != err_cnt_prev.rx_err_cnt ||
-		    state_prev != state) {
-
-			err_cnt_prev.tx_err_cnt = err_cnt.tx_err_cnt;
-			err_cnt_prev.rx_err_cnt = err_cnt.rx_err_cnt;
-			state_prev = state;
-			printk("state: %s\n"
-			       "rx error count: %d\n"
-			       "tx error count: %d\n",
-			       state_to_str(state),
-			       err_cnt.rx_err_cnt, err_cnt.tx_err_cnt);
-		} else {
-			k_sleep(K_MSEC(100));
-		}
-	}
-}
-
-void state_change_work_handler(struct k_work *work)
+void activity3_babble(void)
 {
-	printk("State Change ISR\nstate: %s\n"
-	       "rx error count: %d\n"
-	       "tx error count: %d\n",
-		state_to_str(current_state),
-		current_err_cnt.rx_err_cnt, current_err_cnt.tx_err_cnt);
+    send_msg_via_can(can_dev, &led_frame, true);
 
-#ifndef CONFIG_CAN_AUTO_BUS_OFF_RECOVERY
-	if (current_state == CAN_BUS_OFF) {
-		printk("Recover from bus-off\n");
+    // Send counter message
+    send_msg_via_can(can_dev, &counter_frame, false);
 
-		if (can_recover(can_dev, K_MSEC(100)) != 0) {
-			printk("Recovery timed out\n");
-		}
-	}
-#endif /* CONFIG_CAN_AUTO_BUS_OFF_RECOVERY */
-}
+    // Register callback for LED message
+    can_attach_isr(can_dev, rx_callback_function, NULL, &led_filter);
+};
 
-void state_change_isr(enum can_state state, struct can_bus_err_cnt err_cnt)
+void activity3_normal(void)
 {
-	current_state = state;
-	current_err_cnt = err_cnt;
-	k_work_submit(&state_change_work);
-}
+    send_msg_via_can(can_dev, &led_frame, false);
 
-void main(void)
+    // Send counter message
+    send_msg_via_can(can_dev, &counter_frame, false);
+
+    // Register callback for LED message
+    can_attach_isr(can_dev, rx_callback_function, NULL, &led_filter);   // babbling node
+};
+
+int main()
 {
-	const struct zcan_filter change_led_filter = {
-		.id_type = CAN_STANDARD_IDENTIFIER,
-		.rtr = CAN_DATAFRAME,
-		.id = LED_MSG_ID,
-		.rtr_mask = 1,
-		.id_mask = CAN_STD_ID_MASK
-	};
-	struct zcan_frame change_led_frame = {
-		.id_type = CAN_STANDARD_IDENTIFIER,
-		.rtr = CAN_DATAFRAME,
-		.id = LED_MSG_ID,
-		.dlc = 1
-	};
-	struct zcan_frame counter_frame = {
-		.id_type = CAN_EXTENDED_IDENTIFIER,
-		.rtr = CAN_DATAFRAME,
-		.id = COUNTER_MSG_ID,
-		.dlc = 2
-	};
-	uint8_t toggle = 1;
-	uint16_t counter = 0;
-	k_tid_t rx_tid, get_state_tid;
-	int ret;
+    // Redirect to other main functions
+    #ifdef RUN_ACTIVITY0
+    can_set_mode(&can_dev, CAN_LOOPBACK_MODE);
+    activity0();
+    #endif
 
-	if (!device_is_ready(can_dev)) {
-		printk("CAN: Device %s not ready.\n", can_dev->name);
-		return;
-	}
+    #ifdef RUN_ACTIVITY1
+    can_set_mode(&can_dev, CAN_LOOPBACK_MODE);
+    activity1();
+    #endif
 
-#ifdef CONFIG_LOOPBACK_MODE
-	can_set_mode(can_dev, CAN_LOOPBACK_MODE);
-#endif
-
-	if (led.port != NULL) {
-		if (!device_is_ready(led.port)) {
-			printk("LED: Device %s not ready.\n",
-			       led.port->name);
-			return;
-		}
-		ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_HIGH);
-		if (ret < 0) {
-			printk("Error setting LED pin to output mode [%d]",
-			       ret);
-			led.port = NULL;
-		}
-	}
+    #ifdef RUN_ACTIVITY2
+    can_set_mode(&can_dev, CAN_NORMAL_MODE);
+    activity2();
+    #endif
 
 
-	k_work_init(&state_change_work, state_change_work_handler);
-
-	ret = can_attach_workq(can_dev, &k_sys_work_q, &rx_work, change_led,
-			       NULL, &change_led_filter);
-	if (ret == CAN_NO_FREE_FILTER) {
-		printk("Error, no filter available!\n");
-		return;
-	}
-
-	printk("Change LED filter ID: %d\n", ret);
-
-	rx_tid = k_thread_create(&rx_thread_data, rx_thread_stack,
-				 K_THREAD_STACK_SIZEOF(rx_thread_stack),
-				 rx_thread, NULL, NULL, NULL,
-				 RX_THREAD_PRIORITY, 0, K_NO_WAIT);
-	if (!rx_tid) {
-		printk("ERROR spawning rx thread\n");
-	}
+    #ifdef RUN_ACTIVITY3_BABBLE
+    can_set_mode(&can_dev, CAN_NORMAL_MODE);
+    activity3_babble();
+    #endif
 
 
-	get_state_tid = k_thread_create(&poll_state_thread_data,
-					poll_state_stack,
-					K_THREAD_STACK_SIZEOF(poll_state_stack),
-					poll_state_thread, NULL, NULL, NULL,
-					STATE_POLL_THREAD_PRIORITY, 0,
-					K_NO_WAIT);
-	if (!get_state_tid) {
-		printk("ERROR spawning poll_state_thread\n");
-	}
+    #ifdef RUN_ACTIVITY3_NORMAL
+    can_set_mode(&can_dev, CAN_NORMAL_MODE);
+    activity3_normal();
+    #endif
 
-	can_register_state_change_isr(can_dev, state_change_isr);
-
-	printk("Finished init.\n");
-
-	while (1) {
-		change_led_frame.data[0] = toggle++ & 0x01 ? SET_LED : RESET_LED;
-		/* This sending call is none blocking. */
-        printk("send non-block\n");
-		can_send(can_dev, &change_led_frame, K_FOREVER,
-			 tx_irq_callback,
-			 "LED change");
-		k_sleep(SLEEP_TIME);
-
-		UNALIGNED_PUT(sys_cpu_to_be16(counter),
-			      (uint16_t *)&counter_frame.data[0]);
-		counter++;
-		/* This sending call is blocking until the message is sent. */
-        printk("send block\n");
-		can_send(can_dev, &counter_frame, K_MSEC(100), NULL, NULL);
-		k_sleep(SLEEP_TIME);
-	}
+    return 0;
 }
